@@ -1,0 +1,14 @@
+[package]
+name = "tryquinn"
+version = "0.1.0"
+authors = ["Andrew Dirksen <andrew@dirksen.com>"]
+edition = "2018"
+
+[dependencies]
+quinn = "0.3.0"
+rustls = { version = "0.15.2", features = [ "dangerous_configuration" ] }
+rcgen = "0.4.0"
+tokio = "0.1.21"
+futures = "0.1.27"
+webpki = "0.19.1"
+der-parser = "1.1.1"
