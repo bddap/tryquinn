@@ -7,8 +7,12 @@ edition = "2018"
 [dependencies]
 quinn = "0.3.0"
 rustls = { version = "0.15.2", features = [ "dangerous_configuration" ] }
-rcgen = "0.4.0"
 tokio = "0.1.21"
 futures = "0.1.27"
 webpki = "0.19.1"
-der-parser = "1.1.1"
+x509-parser = "0.4.2"
+
+[dependencies.rcgen]
+version = "0.4.1" # KeyPair::public_key is pub on master, waiting for v0.4.2
+git = "https://github.com/est31/rcgen.git"
+rev = "ad0cf70db9fa9c2f305425665d98f846af9cc652"

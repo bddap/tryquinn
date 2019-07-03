@@ -10,25 +10,60 @@ use std::collections::BTreeSet;
 use webpki::DNSNameRef;
 
 pub struct Whitelist {
-    whitelist: BTreeSet<[u8; 32]>,
+    whitelist: BTreeSet<Vec<u8>>,
 }
 
 impl Whitelist {
-    pub fn new<'a>(elems: impl IntoIterator<Item = &'a [u8; 32]>) -> Self {
+    pub fn new<'a>(elems: impl IntoIterator<Item = &'a [u8; 65]>) -> Self {
         Whitelist {
-            whitelist: elems.into_iter().map(Clone::clone).collect(),
+            whitelist: elems.into_iter().map(|a| a.to_vec()).collect(),
         }
     }
 
-    fn matches(&self, presented_certs: &[Certificate]) -> bool {
-        // Assert that signee is in the whitelist
-        // Assert the signee == the signer
-        dbg!(presented_certs);
-        dbg!(&self.whitelist);
-        if let [_presented_cert] = &presented_certs {
-            unimplemented!()
+    fn matches(&self, presented_certs: &[Certificate]) -> Result<(), TLSError> {
+        // One cert was presented
+        let presented_cert = match &presented_certs {
+            [presented_cert] => Ok(presented_cert),
+            _ => Err(TLSError::WebPKIError(
+                webpki::Error::PathLenConstraintViolated,
+            )),
+        }?;
+
+        // cert is valid x509 der
+        let parsed = x509_parser::parse_x509_der(presented_cert.as_ref())
+            .map_err(|_| TLSError::WebPKIError(webpki::Error::BadDER))
+            .and_then(|(rest, parsed)| {
+                // make sure there is no more data tobe parsed
+                if rest.len() == 0 {
+                    Ok(parsed)
+                } else {
+                    Err(TLSError::WebPKIError(webpki::Error::BadDER))
+                }
+            })?;
+
+        if self.whitelist.contains(
+            parsed
+                .tbs_certificate
+                .subject_pki
+                .subject_public_key
+                .as_ref(),
+        ) {
+            Ok(())
         } else {
-            false
+            dbg!(parsed
+                .tbs_certificate
+                .subject_pki
+                .subject_public_key
+                .as_ref()
+                .len());
+            dbg!(
+                parsed
+                    .tbs_certificate
+                    .subject_pki
+                    .subject_public_key
+                    .as_ref()[0]
+            );
+            Err(TLSError::WebPKIError(webpki::Error::UnknownIssuer))
         }
     }
 }
@@ -41,13 +76,8 @@ impl ServerCertVerifier for Whitelist {
         _dns_name: DNSNameRef,
         _ocsp_response: &[u8],
     ) -> Result<ServerCertVerified, TLSError> {
-        if self.matches(presented_certs) {
-            Ok(ServerCertVerified::assertion())
-        } else {
-            Err(TLSError::WebPKIError(
-                webpki::Error::PathLenConstraintViolated,
-            ))
-        }
+        self.matches(presented_certs)
+            .map(|()| ServerCertVerified::assertion())
     }
 }
 
@@ -60,13 +90,8 @@ impl ClientCertVerifier for Whitelist {
         &self,
         presented_certs: &[Certificate],
     ) -> Result<ClientCertVerified, TLSError> {
-        if self.matches(presented_certs) {
-            Ok(ClientCertVerified::assertion())
-        } else {
-            Err(TLSError::WebPKIError(
-                webpki::Error::PathLenConstraintViolated,
-            ))
-        }
+        self.matches(presented_certs)
+            .map(|()| ClientCertVerified::assertion())
     }
 
     fn offer_client_auth(&self) -> bool {
@@ -77,3 +102,25 @@ impl ClientCertVerifier for Whitelist {
         true
     }
 }
+
+// AlgorithmIdentifier {
+//     algorithm: OID(1.2.840.10045.2.1),
+//     parameters: DerObject {
+//         class: 0,
+//         structured: 0,
+//         tag: 255,
+//         content: ContextSpecific(
+//             0,
+//             Some(
+//                 DerObject {
+//                     class: 0,
+//                     structured: 0,
+//                     tag: 6,
+//                     content: OID(
+//                         OID(1.2.840.10045.3.1.7),
+//                     ),
+//                 },
+//             ),
+//         ),
+//     },
+// }

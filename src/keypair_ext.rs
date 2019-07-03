@@ -15,8 +15,9 @@ pub trait KeyPairExt {
     /// This function makes a copy by serializing then deserializing
     fn clone_self(&self) -> KeyPair;
 
-    /// Get public key from keypair
-    fn get_pub(&self) -> ();
+    /// Return public key in raw form. Return None if public key is not
+    /// 65 bytes long.
+    fn get_pk65(&self) -> Option<[u8; 65]>;
 }
 
 impl KeyPairExt for KeyPair {
@@ -41,7 +42,13 @@ impl KeyPairExt for KeyPair {
         KeyPair::from_pem(&pem).unwrap()
     }
 
-    fn get_pub(&self) -> () {
-        unimplemented!()
+    fn get_pk65(&self) -> Option<[u8; 65]> {
+        let pk = self.public_key();
+        if pk.len() != 65 {
+            return None;
+        }
+        let mut ret = [0u8; 65];
+        ret.copy_from_slice(pk);
+        Some(ret)
     }
 }
